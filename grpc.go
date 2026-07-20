@@ -64,8 +64,8 @@ func (t *SUTTargets) GRPC(ctx context.Context, serviceName string) (string, erro
 }
 
 // GRPC returns a connection to the gRPC service with the given serviceName from
-// the SUT.
-func (i *SUTInterfaces) GRPC(ctx context.Context, serviceName string) (*grpc.ClientConn, error) {
+// the SUT and dialed with the provided options.
+func (i *SUTInterfaces) GRPC(ctx context.Context, serviceName string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	if !i.sut.started {
 		return nil, ErrNotStarted
 	}
@@ -88,8 +88,11 @@ func (i *SUTInterfaces) GRPC(ctx context.Context, serviceName string) (*grpc.Cli
 	retryPolicy := backoff.NewExponentialBackOff()
 	retryPolicy.MaxElapsedTime = dialTimeout
 	if err := backoff.Retry(func() error {
-		// TODO(team): Change to secure gRPC servers.
-		conn, err = grpc.DialContext(ctx, target, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		// By default, use insecure credentials, but allow the user to override
+		// this by passing in a WithTransportCredentials option. These are applied
+		// in order, so the last one wins.
+		opts = append([]grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}, opts...)
+		conn, err = grpc.NewClient(target, opts...)
 		if err != nil {
 			return fmt.Errorf("%w: gRPC %s: %v", ErrDialGRPCService, serviceName, err)
 		}

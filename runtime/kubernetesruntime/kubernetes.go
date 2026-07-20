@@ -35,6 +35,7 @@ import (
 	"github.com/distribution/reference"
 	dockerconfig "github.com/docker/cli/cli/config"
 	log "github.com/golang/glog"
+	"github.com/google/uuid"
 	dockerarchive "github.com/moby/go-archive"
 	dockerclient "github.com/moby/moby/client"
 	"github.com/openconfig/monax"
@@ -60,18 +61,23 @@ const (
 var (
 	errBuildDockerImage                    = errors.New("build Docker image")
 	errCreateKubernetesClient              = errors.New("create Kubernetes client")
+	errCreateNamespace                     = errors.New("create namespace")
 	errDecodeKubernetesComponentParameters = errors.New("decode Kubernetes component parameters")
+	errDeleteNamespace                     = errors.New("delete namespace")
 	errDependencyNotStarted                = errors.New("dependency not started")
 	errDeploymentHealth                    = errors.New("deployment unhealthy")
 	errExtractKindClusterName              = errors.New("extract kind cluster name")
 	errGetAuthConfig                       = errors.New("get auth config")
+	errGetNamespace                        = errors.New("get namespace")
 	errGetNodeInternalIP                   = errors.New("get node internal IP")
 	errInvalidBorgComponentParameters      = errors.New("validate Borg component parameters")
 	errInvalidIPAddress                    = errors.New("invalid IP address")
 	errInvalidServiceType                  = errors.New("invalid service type")
+	errListServices                        = errors.New("list services")
 	errLoadDockerConfig                    = errors.New("load Docker config")
 	errLoadDockerImageToKind               = errors.New("load Docker image into kind cluster")
 	errMarshalAuthConfig                   = errors.New("marshal auth config")
+	errNamespaceNotActive                  = errors.New("namespace not active")
 	errNoImage                             = errors.New("no image")
 	errProcessKubeconfig                   = errors.New("process kubeconfig")
 	errProcessVars                         = errors.New("process vars")
@@ -95,15 +101,20 @@ var (
 )
 
 type kubernetesHandler struct {
-	docker  *dockerclient.Client
-	kubectl *kubernetes.Clientset
-
-	mu                  sync.Mutex
+	docker              *dockerclient.Client
+	kubectl             *kubernetes.Clientset
 	logDir              string
 	serviceType         kubernetescore.ServiceType
 	kubeconfigPath      string
 	imageRepositoryAddr string
-	stateByComponent    map[*monax.Component]*kubernetesComponent
+
+	createUniqueNamespace bool
+	configuredNamespace   string
+	namespace             string
+
+	// mu protects fields in the same group.
+	mu               sync.Mutex
+	stateByComponent map[*monax.Component]*kubernetesComponent
 }
 
 type kubernetesComponent struct {
@@ -148,6 +159,9 @@ func (h *kubernetesHandler) setParameters(parameters *runtimepb.KubernetesRuntim
 	h.kubeconfigPath = kubernetesParams.GetKubeconfigPath()
 	h.imageRepositoryAddr = kubernetesParams.GetImageRepositoryAddress()
 
+	h.createUniqueNamespace = kubernetesParams.GetCreateUniqueNamespace()
+	h.configuredNamespace = kubernetesParams.GetNamespaceOrPrefix()
+
 	h.newDockerClient(kubernetesParams)
 
 	// With the default service type set to NodePort and this being called during
@@ -187,8 +201,6 @@ func (h *kubernetesHandler) newDockerClient(parameters *runtimepb.KubernetesHand
 }
 
 func (h *kubernetesHandler) state(ctx context.Context, component *monax.Component) *kubernetesComponent {
-	h.mu.Lock()
-	defer h.mu.Unlock()
 	state, ok := h.stateByComponent[component]
 	if !ok {
 		log.FatalContextf(ctx, "Unexpected missing state: component %v", component)
@@ -292,6 +304,15 @@ func (h *kubernetesHandler) updateDeploymentContainers(ctx context.Context, depl
 }
 
 func (h *kubernetesHandler) Start(ctx context.Context, component *monax.Component) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if h.namespace == "" {
+		if err := h.createNamespace(ctx); err != nil {
+			return err
+		}
+	}
+
 	state := h.state(ctx, component)
 
 	vars, err := monax.ProcessVars(nil, state.parameters.GetVars(), component)
@@ -323,13 +344,13 @@ func (h *kubernetesHandler) startDeployment(ctx context.Context, deployment *kub
 	}
 	configMap.SetName(deployment.Name)
 	configMap.SetNamespace(deployment.Namespace)
-	createdConfigMaps := h.kubectl.CoreV1().ConfigMaps(kubernetescore.NamespaceDefault)
+	createdConfigMaps := h.kubectl.CoreV1().ConfigMaps(deployment.Namespace)
 	if _, err := createdConfigMaps.Create(ctx, configMap, kubernetesmeta.CreateOptions{}); err != nil {
 		return nil, err
 	}
 	h.logData(ctx, createdConfigMaps, deployment.Name)
 
-	createdDeployments := h.kubectl.AppsV1().Deployments(kubernetescore.NamespaceDefault)
+	createdDeployments := h.kubectl.AppsV1().Deployments(deployment.Namespace)
 	result, err := createdDeployments.Create(ctx, deployment, kubernetesmeta.CreateOptions{})
 	if err != nil {
 		return nil, err
@@ -351,7 +372,7 @@ func (h *kubernetesHandler) startDeployment(ctx context.Context, deployment *kub
 }
 
 func (h *kubernetesHandler) checkDeploymentHealth(ctx context.Context, deployment *kubernetesapps.Deployment) error {
-	deployment, err := h.kubectl.AppsV1().Deployments(kubernetescore.NamespaceDefault).Get(ctx, deployment.GetName(), kubernetesmeta.GetOptions{})
+	deployment, err := h.kubectl.AppsV1().Deployments(deployment.Namespace).Get(ctx, deployment.GetName(), kubernetesmeta.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("%w: %v", errDeploymentHealth, err)
 	}
@@ -360,7 +381,7 @@ func (h *kubernetesHandler) checkDeploymentHealth(ctx context.Context, deploymen
 	if err != nil {
 		return fmt.Errorf("%w: getting label selector for deployment %s: %v", errDeploymentHealth, deployment.GetName(), err)
 	}
-	pods, err := h.kubectl.CoreV1().Pods(kubernetescore.NamespaceDefault).List(ctx, kubernetesmeta.ListOptions{LabelSelector: selector.String()})
+	pods, err := h.kubectl.CoreV1().Pods(deployment.Namespace).List(ctx, kubernetesmeta.ListOptions{LabelSelector: selector.String()})
 	if err != nil {
 		return fmt.Errorf("%w: listing pods for deployment %s: %v", errDeploymentHealth, deployment.GetName(), err)
 	}
@@ -391,7 +412,7 @@ func (h *kubernetesHandler) checkDeploymentHealth(ctx context.Context, deploymen
 func (h *kubernetesHandler) startService(ctx context.Context, service *kubernetescore.Service, params *runtimepb.KubernetesComponentParameters) (*kubernetescore.Service, error) {
 	log.InfoContextf(ctx, "Creating service: %s", service.Name)
 
-	result, err := h.kubectl.CoreV1().Services(kubernetescore.NamespaceDefault).Create(ctx, service, kubernetesmeta.CreateOptions{})
+	result, err := h.kubectl.CoreV1().Services(service.Namespace).Create(ctx, service, kubernetesmeta.CreateOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -408,6 +429,8 @@ func (h *kubernetesHandler) startService(ctx context.Context, service *kubernete
 }
 
 func (h *kubernetesHandler) Stop(ctx context.Context, component *monax.Component) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	state := h.state(ctx, component)
 
 	var stopDeploymentErr, stopServiceErr error
@@ -424,28 +447,90 @@ func (h *kubernetesHandler) Stop(ctx context.Context, component *monax.Component
 	state.service.ResourceVersion = ""
 	state.started = false
 
-	// Handle errors.
-	if stopDeploymentErr != nil && stopServiceErr != nil {
-		// This gives err.Unwrap() if the error needs to be separated later.
-		return fmt.Errorf("%w | %w", stopDeploymentErr, stopServiceErr)
+	allStopped := true
+	for _, state := range h.stateByComponent {
+		if state.started {
+			allStopped = false
+			break
+		}
 	}
-	if stopDeploymentErr != nil {
-		return stopDeploymentErr
+
+	var deleteNamespaceErr error
+	if allStopped {
+		deleteNamespaceErr = h.cleanupNamespace(ctx, state.service)
 	}
-	return stopServiceErr
+
+	errs := []error{stopDeploymentErr, stopServiceErr, deleteNamespaceErr}
+	return errors.Join(errs...)
+}
+
+func (h *kubernetesHandler) createNamespace(ctx context.Context) error {
+	// Ensure that all components are using the same namespace.
+	defer func() {
+		for _, state := range h.stateByComponent {
+			state.service.Namespace = h.namespace
+			state.deployment.Namespace = h.namespace
+		}
+	}()
+
+	if !h.createUniqueNamespace {
+		if h.configuredNamespace == "" {
+			h.configuredNamespace = kubernetescore.NamespaceDefault
+		}
+		h.namespace = h.configuredNamespace
+		ns, err := h.kubectl.CoreV1().Namespaces().Get(ctx, h.namespace, kubernetesmeta.GetOptions{})
+		if err != nil {
+			return fmt.Errorf("%w: %q: %v", errGetNamespace, h.namespace, err)
+		}
+		if ns.Status.Phase != kubernetescore.NamespaceActive {
+			return fmt.Errorf("%w: %v: %v", errNamespaceNotActive, h.namespace, ns.Status.Phase)
+		}
+		log.InfoContextf(ctx, "Using namespace %q for test run", h.namespace)
+		return nil
+	}
+
+	prefix := "monax"
+	if h.configuredNamespace != "" {
+		prefix = h.configuredNamespace
+	}
+	h.namespace = fmt.Sprintf("%s-%s", prefix, uuid.NewString()[:8])
+	ns := &kubernetescore.Namespace{
+		ObjectMeta: kubernetesmeta.ObjectMeta{
+			Name: h.namespace,
+		},
+	}
+	if _, err := h.kubectl.CoreV1().Namespaces().Create(ctx, ns, kubernetesmeta.CreateOptions{}); err != nil {
+		return fmt.Errorf("%w: %s: %v", errCreateNamespace, h.namespace, err)
+	}
+	log.InfoContextf(ctx, "Created unique namespace for test run: %s", h.namespace)
+	return nil
+}
+
+func (h *kubernetesHandler) cleanupNamespace(ctx context.Context, service *kubernetescore.Service) error {
+	if !h.createUniqueNamespace {
+		return nil
+	}
+
+	log.InfoContextf(ctx, "Deleting namespace %s", h.namespace)
+	if err := h.kubectl.CoreV1().Namespaces().Delete(ctx, h.namespace, kubernetesmeta.DeleteOptions{}); err != nil {
+		return fmt.Errorf("%w: %s: %v", errDeleteNamespace, h.namespace, err)
+	}
+
+	h.namespace = ""
+	return nil
 }
 
 func (h *kubernetesHandler) stopDeployment(ctx context.Context, deployment *kubernetesapps.Deployment) error {
 	log.InfoContextf(ctx, "Deleting deployment %s", deployment.Name)
-	if err := h.kubectl.CoreV1().ConfigMaps(kubernetescore.NamespaceDefault).Delete(ctx, deployment.Name, kubernetesmeta.DeleteOptions{}); err != nil {
+	if err := h.kubectl.CoreV1().ConfigMaps(deployment.Namespace).Delete(ctx, deployment.Name, kubernetesmeta.DeleteOptions{}); err != nil {
 		return err
 	}
-	return h.kubectl.AppsV1().Deployments(kubernetescore.NamespaceDefault).Delete(ctx, deployment.Name, kubernetesmeta.DeleteOptions{})
+	return h.kubectl.AppsV1().Deployments(deployment.Namespace).Delete(ctx, deployment.Name, kubernetesmeta.DeleteOptions{})
 }
 
 func (h *kubernetesHandler) stopService(ctx context.Context, service *kubernetescore.Service) error {
 	log.InfoContextf(ctx, "Deleting service %s", service.Name)
-	return h.kubectl.CoreV1().Services(kubernetescore.NamespaceDefault).Delete(ctx, service.Name, kubernetesmeta.DeleteOptions{})
+	return h.kubectl.CoreV1().Services(service.Namespace).Delete(ctx, service.Name, kubernetesmeta.DeleteOptions{})
 }
 
 func (h *kubernetesHandler) Status(ctx context.Context, component *monax.Component) error {
@@ -530,7 +615,7 @@ func getNodeInternalIP(ctx context.Context, service *kubernetescore.Service, kub
 
 	// List the pods using the selector. This should only return the pod(s) the
 	// service is using.
-	pods, err := kubectl.CoreV1().Pods(kubernetescore.NamespaceDefault).List(ctx, kubernetesmeta.ListOptions{
+	pods, err := kubectl.CoreV1().Pods(service.Namespace).List(ctx, kubernetesmeta.ListOptions{
 		LabelSelector: labelSelector,
 	})
 	if err != nil {
@@ -579,7 +664,7 @@ func (t *kubernetesTargets) getServiceIP(ctx context.Context, portName string) (
 		return monax.EmptyTarget, err
 	}
 
-	serviceUpdate, err := t.handler.kubectl.CoreV1().Services(kubernetescore.NamespaceDefault).Get(ctx, state.service.Name, kubernetesmeta.GetOptions{})
+	serviceUpdate, err := t.handler.kubectl.CoreV1().Services(state.service.Namespace).Get(ctx, state.service.Name, kubernetesmeta.GetOptions{})
 	if err != nil {
 		return monax.EmptyTarget, fmt.Errorf("%w: %v: %v", errServiceHealth, t.component, err)
 	}
@@ -646,7 +731,7 @@ func (h *kubernetesHandler) waitForServiceUp(ctx context.Context, service *kuber
 }
 
 func (h *kubernetesHandler) checkServiceUp(ctx context.Context, service *kubernetescore.Service) error {
-	service, err := h.kubectl.CoreV1().Services(kubernetescore.NamespaceDefault).Get(ctx, service.GetName(), kubernetesmeta.GetOptions{})
+	service, err := h.kubectl.CoreV1().Services(service.Namespace).Get(ctx, service.GetName(), kubernetesmeta.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("%w: %v", errServiceHealth, err)
 	}

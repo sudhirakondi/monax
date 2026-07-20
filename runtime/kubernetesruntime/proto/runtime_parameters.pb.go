@@ -193,6 +193,8 @@ type KubernetesHandlerParameters struct {
 	xxx_hidden_DockerCertPath         *string                                 `protobuf:"bytes,3,opt,name=docker_cert_path,json=dockerCertPath"`
 	xxx_hidden_ServiceType            KubernetesHandlerParameters_ServiceType `protobuf:"varint,4,opt,name=service_type,json=serviceType,enum=monax.kubernetes.KubernetesHandlerParameters_ServiceType,def=1"`
 	xxx_hidden_ImageRepositoryAddress *string                                 `protobuf:"bytes,5,opt,name=image_repository_address,json=imageRepositoryAddress"`
+	xxx_hidden_NamespaceOrPrefix      *string                                 `protobuf:"bytes,6,opt,name=namespace_or_prefix,json=namespaceOrPrefix"`
+	xxx_hidden_CreateUniqueNamespace  bool                                    `protobuf:"varint,7,opt,name=create_unique_namespace,json=createUniqueNamespace,def=0"`
 	XXX_raceDetectHookData            protoimpl.RaceDetectHookData
 	XXX_presence                      [1]uint32
 	unknownFields                     protoimpl.UnknownFields
@@ -201,8 +203,9 @@ type KubernetesHandlerParameters struct {
 
 // Default values for KubernetesHandlerParameters fields.
 const (
-	Default_KubernetesHandlerParameters_DockerHostUrl = string("unix:///var/run/docker.sock")
-	Default_KubernetesHandlerParameters_ServiceType   = KubernetesHandlerParameters_SERVICE_TYPE_NODE_PORT
+	Default_KubernetesHandlerParameters_DockerHostUrl         = string("unix:///var/run/docker.sock")
+	Default_KubernetesHandlerParameters_ServiceType           = KubernetesHandlerParameters_SERVICE_TYPE_NODE_PORT
+	Default_KubernetesHandlerParameters_CreateUniqueNamespace = bool(false)
 )
 
 func (x *KubernetesHandlerParameters) Reset() {
@@ -281,29 +284,58 @@ func (x *KubernetesHandlerParameters) GetImageRepositoryAddress() string {
 	return ""
 }
 
+func (x *KubernetesHandlerParameters) GetNamespaceOrPrefix() string {
+	if x != nil {
+		if x.xxx_hidden_NamespaceOrPrefix != nil {
+			return *x.xxx_hidden_NamespaceOrPrefix
+		}
+		return ""
+	}
+	return ""
+}
+
+func (x *KubernetesHandlerParameters) GetCreateUniqueNamespace() bool {
+	if x != nil {
+		if protoimpl.X.Present(&(x.XXX_presence[0]), 6) {
+			return x.xxx_hidden_CreateUniqueNamespace
+		}
+	}
+	return Default_KubernetesHandlerParameters_CreateUniqueNamespace
+}
+
 func (x *KubernetesHandlerParameters) SetKubeconfigPath(v string) {
 	x.xxx_hidden_KubeconfigPath = &v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 5)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 0, 7)
 }
 
 func (x *KubernetesHandlerParameters) SetDockerHostUrl(v string) {
 	x.xxx_hidden_DockerHostUrl = &v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 5)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 1, 7)
 }
 
 func (x *KubernetesHandlerParameters) SetDockerCertPath(v string) {
 	x.xxx_hidden_DockerCertPath = &v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 5)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 2, 7)
 }
 
 func (x *KubernetesHandlerParameters) SetServiceType(v KubernetesHandlerParameters_ServiceType) {
 	x.xxx_hidden_ServiceType = v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 5)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 3, 7)
 }
 
 func (x *KubernetesHandlerParameters) SetImageRepositoryAddress(v string) {
 	x.xxx_hidden_ImageRepositoryAddress = &v
-	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 4, 5)
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 4, 7)
+}
+
+func (x *KubernetesHandlerParameters) SetNamespaceOrPrefix(v string) {
+	x.xxx_hidden_NamespaceOrPrefix = &v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 5, 7)
+}
+
+func (x *KubernetesHandlerParameters) SetCreateUniqueNamespace(v bool) {
+	x.xxx_hidden_CreateUniqueNamespace = v
+	protoimpl.X.SetPresent(&(x.XXX_presence[0]), 6, 7)
 }
 
 func (x *KubernetesHandlerParameters) HasKubeconfigPath() bool {
@@ -341,6 +373,20 @@ func (x *KubernetesHandlerParameters) HasImageRepositoryAddress() bool {
 	return protoimpl.X.Present(&(x.XXX_presence[0]), 4)
 }
 
+func (x *KubernetesHandlerParameters) HasNamespaceOrPrefix() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 5)
+}
+
+func (x *KubernetesHandlerParameters) HasCreateUniqueNamespace() bool {
+	if x == nil {
+		return false
+	}
+	return protoimpl.X.Present(&(x.XXX_presence[0]), 6)
+}
+
 func (x *KubernetesHandlerParameters) ClearKubeconfigPath() {
 	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 0)
 	x.xxx_hidden_KubeconfigPath = nil
@@ -364,6 +410,15 @@ func (x *KubernetesHandlerParameters) ClearImageRepositoryAddress() {
 	x.xxx_hidden_ImageRepositoryAddress = nil
 }
 
+func (x *KubernetesHandlerParameters) ClearNamespaceOrPrefix() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 5)
+	x.xxx_hidden_NamespaceOrPrefix = nil
+}
+
+func (x *KubernetesHandlerParameters) ClearCreateUniqueNamespace() {
+	protoimpl.X.ClearPresent(&(x.XXX_presence[0]), 6)
+}
+
 type KubernetesHandlerParameters_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
@@ -379,6 +434,18 @@ type KubernetesHandlerParameters_builder struct {
 	// However, if the image name already includes a repository address, this
 	// field will be ignored.
 	ImageRepositoryAddress *string
+	// The namespace to use for the Kubernetes objects.
+	// If create_unique_namespace is true, this field will be the prefix for the
+	// unique namespace.
+	// If create_unique_namespace is false, this field will be used as the
+	// namespace for all Kubernetes objects.
+	// If unset and create_unique_namespace is false, the `default` namespace
+	// will be used.
+	NamespaceOrPrefix *string
+	// When true, Monax will create a namespace with the prefix `monax-` plus a
+	// random 8 character UUID. When false, Monax will use the `default`
+	// namespace.
+	CreateUniqueNamespace *bool
 }
 
 func (b0 KubernetesHandlerParameters_builder) Build() *KubernetesHandlerParameters {
@@ -386,24 +453,32 @@ func (b0 KubernetesHandlerParameters_builder) Build() *KubernetesHandlerParamete
 	b, x := &b0, m0
 	_, _ = b, x
 	if b.KubeconfigPath != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 5)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 0, 7)
 		x.xxx_hidden_KubeconfigPath = b.KubeconfigPath
 	}
 	if b.DockerHostUrl != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 5)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 1, 7)
 		x.xxx_hidden_DockerHostUrl = b.DockerHostUrl
 	}
 	if b.DockerCertPath != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 2, 5)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 2, 7)
 		x.xxx_hidden_DockerCertPath = b.DockerCertPath
 	}
 	if b.ServiceType != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 3, 5)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 3, 7)
 		x.xxx_hidden_ServiceType = *b.ServiceType
 	}
 	if b.ImageRepositoryAddress != nil {
-		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 4, 5)
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 4, 7)
 		x.xxx_hidden_ImageRepositoryAddress = b.ImageRepositoryAddress
+	}
+	if b.NamespaceOrPrefix != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 5, 7)
+		x.xxx_hidden_NamespaceOrPrefix = b.NamespaceOrPrefix
+	}
+	if b.CreateUniqueNamespace != nil {
+		protoimpl.X.SetPresentNonAtomic(&(x.XXX_presence[0]), 6, 7)
+		x.xxx_hidden_CreateUniqueNamespace = *b.CreateUniqueNamespace
 	}
 	return m0
 }
@@ -907,13 +982,15 @@ const file_runtime_parameters_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12M\n" +
 	"\n" +
 	"kubernetes\x18\x02 \x01(\v2-.monax.kubernetes.KubernetesHandlerParametersR\n" +
-	"kubernetes\"\xce\x03\n" +
+	"kubernetes\"\xbd\x04\n" +
 	"\x1bKubernetesHandlerParameters\x12'\n" +
 	"\x0fkubeconfig_path\x18\x01 \x01(\tR\x0ekubeconfigPath\x12C\n" +
 	"\x0fdocker_host_url\x18\x02 \x01(\t:\x1bunix:///var/run/docker.sockR\rdockerHostUrl\x12(\n" +
 	"\x10docker_cert_path\x18\x03 \x01(\tR\x0edockerCertPath\x12t\n" +
 	"\fservice_type\x18\x04 \x01(\x0e29.monax.kubernetes.KubernetesHandlerParameters.ServiceType:\x16SERVICE_TYPE_NODE_PORTR\vserviceType\x128\n" +
-	"\x18image_repository_address\x18\x05 \x01(\tR\x16imageRepositoryAddress\"g\n" +
+	"\x18image_repository_address\x18\x05 \x01(\tR\x16imageRepositoryAddress\x12.\n" +
+	"\x13namespace_or_prefix\x18\x06 \x01(\tR\x11namespaceOrPrefix\x12=\n" +
+	"\x17create_unique_namespace\x18\a \x01(\b:\x05falseR\x15createUniqueNamespace\"g\n" +
 	"\vServiceType\x12\x1c\n" +
 	"\x18SERVICE_TYPE_UNSPECIFIED\x10\x00\x12\x1a\n" +
 	"\x16SERVICE_TYPE_NODE_PORT\x10\x01\x12\x1e\n" +

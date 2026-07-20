@@ -56,6 +56,20 @@ message KubernetesHandlerParameters {
   // However, if the image name already includes a repository address, this
   // field will be ignored.
   string image_repository_address = 5;
+
+  // The namespace to use for the Kubernetes objects.
+  // If create_unique_namespace is true, this field will be the prefix for the
+  // unique namespace.
+  // If create_unique_namespace is false, this field will be used as the
+  // namespace for all Kubernetes objects.
+  // If unset and create_unique_namespace is false, the `default` namespace
+  // will be used.
+  string namespace_or_prefix = 6;
+
+  // When true, Monax will create a namespace with the prefix `monax-` plus a
+  // random 8 character UUID. When false, Monax will use the `default`
+  // namespace.
+  bool create_unique_namespace = 7 [default = false];
 }
 
 message KubernetesComponentParameters {

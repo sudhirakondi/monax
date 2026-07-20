@@ -58,6 +58,10 @@ func setEnv() {
 
 // ProcessVars replaces templated strings in the local map with the appropriate
 // values from the global or local map or the appropriate dependency target.
+// After the template values are substituted, any strings in the resulting
+// values like '$VAR_NAME' or '${VAR_NAME}' will be replaced with the
+// corresponding environment variable value. Note that environment variables
+// cannot be used within the template expressions {{ ... }} themselves.
 func ProcessVars(global map[string]string, local map[string]string, component *Component) (map[string]string, error) {
 	filledLocals := make(map[string]string, len(local))
 	for key, value := range local {
