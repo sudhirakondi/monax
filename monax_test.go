@@ -24,6 +24,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/testing/protocmp"
 
 	monaxpb "github.com/openconfig/monax/proto"
 )
@@ -678,6 +679,97 @@ func TestProcessAbstractSUT(t *testing.T) {
 			}
 			if diff := cmp.Diff(test.wantTopComponentsByProvidedInterfaceID, topComponentsByProvidedInterfaceID, componentDiffOpts...); diff != "" {
 				t.Errorf("processAbstractSUT: requiredInterfacesToComponents diff (-want +got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestApplyOverride(t *testing.T) {
+	t.Parallel()
+
+	interfaceA := monaxpb.Interface_builder{
+		Name: proto.String("A"),
+		Grpc: monaxpb.Grpc_builder{
+			ServiceName: proto.String("test.A"),
+		}.Build(),
+	}.Build()
+	interfaceB := monaxpb.Interface_builder{
+		Name: proto.String("B"),
+		Grpc: monaxpb.Grpc_builder{
+			ServiceName: proto.String("test.B"),
+		}.Build(),
+	}.Build()
+
+	compA := monaxpb.Component_builder{
+		Id: proto.String("CompA"),
+		ProvidedInterfaces: []*monaxpb.Interface{
+			interfaceA,
+			interfaceB,
+		},
+	}.Build()
+
+	overrideA := monaxpb.Component_builder{
+		Id: proto.String("OverrideA"),
+		ProvidedInterfaces: []*monaxpb.Interface{
+			interfaceA,
+		},
+	}.Build()
+
+	overrideNoMatch := monaxpb.Component_builder{
+		Id: proto.String("OverrideNoMatch"),
+		ProvidedInterfaces: []*monaxpb.Interface{
+			monaxpb.Interface_builder{
+				Name: proto.String("NoMatch"),
+				Grpc: monaxpb.Grpc_builder{
+					ServiceName: proto.String("test.NoMatch"),
+				}.Build(),
+			}.Build(),
+		},
+	}.Build()
+
+	compAAfterOverrideA := monaxpb.Component_builder{
+		Id: proto.String("CompA"),
+		ProvidedInterfaces: []*monaxpb.Interface{
+			interfaceB,
+		},
+	}.Build()
+
+	tests := map[string]struct {
+		library        *monaxpb.Library
+		override       *monaxpb.Component
+		wantComponents []*monaxpb.Component
+		wantErr        error
+	}{
+		"override removes matching provided interface and appends override": {
+			library: monaxpb.Library_builder{
+				Components: []*monaxpb.Component{compA},
+			}.Build(),
+			override:       overrideA,
+			wantComponents: []*monaxpb.Component{compAAfterOverrideA, overrideA},
+		},
+		"no matching component": {
+			library: monaxpb.Library_builder{
+				Components: []*monaxpb.Component{compA},
+			}.Build(),
+			override: overrideNoMatch,
+			wantErr:  ErrOverrideNoMatchingComponent,
+		},
+	}
+
+	for name, test := range tests {
+		test := test
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			err := applyOverride(test.override, test.library)
+			if !errors.Is(err, test.wantErr) {
+				t.Errorf("applyOverride error diff: want %v, got %v", test.wantErr, err)
+			}
+			if err != nil {
+				return
+			}
+			if diff := cmp.Diff(test.wantComponents, test.library.GetComponents(), protocmp.Transform()); diff != "" {
+				t.Errorf("applyOverride library components diff (-want +got):\n%s", diff)
 			}
 		})
 	}

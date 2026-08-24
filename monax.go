@@ -62,6 +62,9 @@ var (
 	// ErrNoRuntime indicates a runtime was not returned by the new runtime
 	// function.
 	ErrNoRuntime = errors.New("no runtime")
+
+	// ErrOverrideNoMatchingComponent indicates an override component found no matching component to override.
+	ErrOverrideNoMatchingComponent = errors.New("override component found no matching component to override")
 )
 
 var (
@@ -137,6 +140,13 @@ func New(ctx context.Context, config *Config, newRuntimeFn NewRuntimeFn) (*SUT, 
 // cases, it will inevitably lead to confusion when the same library is valid
 // for one test but invalid for another.
 func processLibrary(config *Config, runtime Runtime) (map[interfaceID]*Component, error) {
+	// If there are overrides, apply them to the library.
+	for _, override := range config.Library.GetOverrides() {
+		if err := applyOverride(override, config.Library); err != nil {
+			return nil, err
+		}
+	}
+
 	// Check that components are unique and have handlers (1, 2) and that provided
 	// interfaces are unique (3).
 	componentByID := make(map[string]*Component)
@@ -236,6 +246,41 @@ func processLibrary(config *Config, runtime Runtime) (map[interfaceID]*Component
 	}
 
 	return componentByProvidedInterfaceID, nil
+}
+
+func applyOverride(override *monaxpb.Component, library *monaxpb.Library) error {
+	foundMatch := false
+	for _, overrideIntf := range override.GetProvidedInterfaces() {
+		overrideID := newInterface(overrideIntf).id()
+
+		for _, component := range library.GetComponents() {
+			var remainingProvidedInterfaces []*monaxpb.Interface
+			matchedInComponent := false
+			for _, intf := range component.GetProvidedInterfaces() {
+				if newInterface(intf).id() == overrideID {
+					matchedInComponent = true
+					foundMatch = true
+				} else {
+					// Keep all non-matching interfaces from the component.
+					remainingProvidedInterfaces = append(remainingProvidedInterfaces, intf)
+				}
+			}
+			if matchedInComponent {
+				// Safe to update the component in the library because processing the
+				// library should only happen once, so original configuration does not
+				// need to be preserved.
+				component.SetProvidedInterfaces(remainingProvidedInterfaces)
+			}
+		}
+	}
+	if !foundMatch {
+		return fmt.Errorf("%w: component %v", ErrOverrideNoMatchingComponent, override.GetId())
+	}
+	// Safe to append the override component now that the matching interface has
+	// been removed from the existing component. If the original component had no
+	// remaining provided interfaces, Monax will ignore it.
+	library.SetComponents(append(library.GetComponents(), override))
+	return nil
 }
 
 // processAbstractSUT produces the list of components needed to satisfy the

@@ -169,6 +169,11 @@ func resolveLibraries(config *Config, libraryPath string, visited map[string]boo
 		config.Library.SetComponents(append(config.Library.GetComponents(), component))
 	}
 
+	// Add current overrides to base library.
+	for _, override := range currentLibrary.GetOverrides() {
+		config.Library.SetOverrides(append(config.Library.GetOverrides(), override))
+	}
+
 	// Do some path management and recurse for all the referenced libraries.
 	for _, nextLibraryPath := range currentLibrary.GetLibraries() {
 		if !filepath.IsAbs(nextLibraryPath) {

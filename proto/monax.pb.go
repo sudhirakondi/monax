@@ -112,6 +112,7 @@ type Library struct {
 	state                 protoimpl.MessageState `protogen:"opaque.v1"`
 	xxx_hidden_Components *[]*Component          `protobuf:"bytes,1,rep,name=components"`
 	xxx_hidden_Libraries  []string               `protobuf:"bytes,2,rep,name=libraries"`
+	xxx_hidden_Overrides  *[]*Component          `protobuf:"bytes,3,rep,name=overrides"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -157,6 +158,15 @@ func (x *Library) GetLibraries() []string {
 	return nil
 }
 
+func (x *Library) GetOverrides() []*Component {
+	if x != nil {
+		if x.xxx_hidden_Overrides != nil {
+			return *x.xxx_hidden_Overrides
+		}
+	}
+	return nil
+}
+
 func (x *Library) SetComponents(v []*Component) {
 	x.xxx_hidden_Components = &v
 }
@@ -165,11 +175,20 @@ func (x *Library) SetLibraries(v []string) {
 	x.xxx_hidden_Libraries = v
 }
 
+func (x *Library) SetOverrides(v []*Component) {
+	x.xxx_hidden_Overrides = &v
+}
+
 type Library_builder struct {
 	_ [0]func() // Prevents comparability and use of unkeyed literals for the builder.
 
 	Components []*Component
 	Libraries  []string
+	// Components provided here will override components with the same interface.
+	// This is useful for cases where you want to inject a fake or mock
+	// implementation of a component. The matching is done by interface type and
+	// service name.
+	Overrides []*Component
 }
 
 func (b0 Library_builder) Build() *Library {
@@ -178,6 +197,7 @@ func (b0 Library_builder) Build() *Library {
 	_, _ = b, x
 	x.xxx_hidden_Components = &b.Components
 	x.xxx_hidden_Libraries = b.Libraries
+	x.xxx_hidden_Overrides = &b.Overrides
 	return m0
 }
 
@@ -1040,12 +1060,13 @@ const file_monax_proto_rawDesc = "" +
 	"\n" +
 	"\vmonax.proto\x12\x05monax\x1a\x19google/protobuf/any.proto\x1a!google/protobuf/go_features.proto\"P\n" +
 	"\vAbstractSut\x12A\n" +
-	"\x13required_interfaces\x18\x01 \x03(\v2\x10.monax.InterfaceR\x12requiredInterfaces\"Y\n" +
+	"\x13required_interfaces\x18\x01 \x03(\v2\x10.monax.InterfaceR\x12requiredInterfaces\"\x89\x01\n" +
 	"\aLibrary\x120\n" +
 	"\n" +
 	"components\x18\x01 \x03(\v2\x10.monax.ComponentR\n" +
 	"components\x12\x1c\n" +
-	"\tlibraries\x18\x02 \x03(\tR\tlibraries\"\xeb\x01\n" +
+	"\tlibraries\x18\x02 \x03(\tR\tlibraries\x12.\n" +
+	"\toverrides\x18\x03 \x03(\v2\x10.monax.ComponentR\toverrides\"\xeb\x01\n" +
 	"\tComponent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\tR\x04kind\x12A\n" +
@@ -1090,19 +1111,20 @@ var file_monax_proto_goTypes = []any{
 var file_monax_proto_depIdxs = []int32{
 	3,  // 0: monax.AbstractSut.required_interfaces:type_name -> monax.Interface
 	2,  // 1: monax.Library.components:type_name -> monax.Component
-	3,  // 2: monax.Component.provided_interfaces:type_name -> monax.Interface
-	3,  // 3: monax.Component.required_interfaces:type_name -> monax.Interface
-	9,  // 4: monax.Component.parameters:type_name -> google.protobuf.Any
-	4,  // 5: monax.Interface.dhcp:type_name -> monax.Dhcp
-	5,  // 6: monax.Interface.grpc:type_name -> monax.Grpc
-	6,  // 7: monax.Interface.http:type_name -> monax.Http
-	7,  // 8: monax.Interface.https:type_name -> monax.Https
-	9,  // 9: monax.RuntimeParameters.parameters:type_name -> google.protobuf.Any
-	10, // [10:10] is the sub-list for method output_type
-	10, // [10:10] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	2,  // 2: monax.Library.overrides:type_name -> monax.Component
+	3,  // 3: monax.Component.provided_interfaces:type_name -> monax.Interface
+	3,  // 4: monax.Component.required_interfaces:type_name -> monax.Interface
+	9,  // 5: monax.Component.parameters:type_name -> google.protobuf.Any
+	4,  // 6: monax.Interface.dhcp:type_name -> monax.Dhcp
+	5,  // 7: monax.Interface.grpc:type_name -> monax.Grpc
+	6,  // 8: monax.Interface.http:type_name -> monax.Http
+	7,  // 9: monax.Interface.https:type_name -> monax.Https
+	9,  // 10: monax.RuntimeParameters.parameters:type_name -> google.protobuf.Any
+	11, // [11:11] is the sub-list for method output_type
+	11, // [11:11] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_monax_proto_init() }

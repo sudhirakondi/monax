@@ -42,6 +42,12 @@ message AbstractSut {
 message Library {
   repeated Component components = 1;
   repeated string libraries = 2;  // paths to other libraries to include
+
+  // Components provided here will override components with the same interface.
+  // This is useful for cases where you want to inject a fake or mock
+  // implementation of a component. The matching is done by interface type and
+  // service name.
+  repeated Component overrides = 3;
 }
 
 // Component describes an element available for inclusion in the SUT in order to
