@@ -107,6 +107,17 @@ type Config struct {
 	// checking for collisions in this map and instead wait for processLibrary to
 	// catch them later.
 	componentBaseDirByID map[string]string
+
+	overrides []*monaxpb.Component
+}
+
+// AddOverrides adds components to override existing components in the library.
+func (c *Config) AddOverrides(overrides ...*monaxpb.Component) {
+	for _, override := range overrides {
+		if override != nil {
+			c.overrides = append(c.overrides, override)
+		}
+	}
 }
 
 // RegisterFlags registers command line flags that modify a Config.
@@ -170,8 +181,8 @@ func resolveLibraries(config *Config, libraryPath string, visited map[string]boo
 	}
 
 	// Add current overrides to base library.
-	for _, override := range currentLibrary.GetOverrides() {
-		config.Library.SetOverrides(append(config.Library.GetOverrides(), override))
+	if overrides := currentLibrary.GetOverrides(); len(overrides) > 0 {
+		config.Library.SetOverrides(append(config.Library.GetOverrides(), overrides...))
 	}
 
 	// Do some path management and recurse for all the referenced libraries.
@@ -197,6 +208,10 @@ func readLibrary(config *Config) error {
 		if err := resolveLibraries(config, config.LibraryPath, make(map[string]bool)); err != nil {
 			return err
 		}
+	}
+	if len(config.overrides) > 0 {
+		config.Library.SetOverrides(append(config.Library.GetOverrides(), config.overrides...))
+		config.overrides = nil
 	}
 	return nil
 }

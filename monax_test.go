@@ -700,13 +700,15 @@ func TestApplyOverride(t *testing.T) {
 		}.Build(),
 	}.Build()
 
-	compA := monaxpb.Component_builder{
-		Id: proto.String("CompA"),
-		ProvidedInterfaces: []*monaxpb.Interface{
-			interfaceA,
-			interfaceB,
-		},
-	}.Build()
+	newCompA := func() *monaxpb.Component {
+		return monaxpb.Component_builder{
+			Id: proto.String("CompA"),
+			ProvidedInterfaces: []*monaxpb.Interface{
+				interfaceA,
+				interfaceB,
+			},
+		}.Build()
+	}
 
 	overrideA := monaxpb.Component_builder{
 		Id: proto.String("OverrideA"),
@@ -742,14 +744,14 @@ func TestApplyOverride(t *testing.T) {
 	}{
 		"override removes matching provided interface and appends override": {
 			library: monaxpb.Library_builder{
-				Components: []*monaxpb.Component{compA},
+				Components: []*monaxpb.Component{newCompA()},
 			}.Build(),
 			override:       overrideA,
 			wantComponents: []*monaxpb.Component{compAAfterOverrideA, overrideA},
 		},
 		"no matching component": {
 			library: monaxpb.Library_builder{
-				Components: []*monaxpb.Component{compA},
+				Components: []*monaxpb.Component{newCompA()},
 			}.Build(),
 			override: overrideNoMatch,
 			wantErr:  ErrOverrideNoMatchingComponent,

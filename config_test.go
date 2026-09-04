@@ -314,6 +314,80 @@ func TestReadLibrary(t *testing.T) {
 				},
 			},
 		},
+		"pass with textproto and AddOverrides": {
+			config: func() *Config {
+				c := &Config{
+					LibraryPath: libraryPath,
+				}
+				c.AddOverrides(
+					monaxpb.Component_builder{
+						Id: proto.String("Override1"),
+					}.Build(),
+					nil,
+					monaxpb.Component_builder{
+						Id: proto.String("Override2"),
+					}.Build(),
+				)
+				return c
+			}(),
+			wantConfig: &Config{
+				Library: monaxpb.Library_builder{
+					Components: []*monaxpb.Component{
+						monaxpb.Component_builder{
+							Id: proto.String("A"),
+						}.Build(),
+					},
+					Overrides: []*monaxpb.Component{
+						monaxpb.Component_builder{
+							Id: proto.String("Override1"),
+						}.Build(),
+						monaxpb.Component_builder{
+							Id: proto.String("Override2"),
+						}.Build(),
+					},
+				}.Build(),
+				componentBaseDirByID: map[string]string{
+					"A": libraryDir,
+				},
+			},
+		},
+		"pass with proto and multiple AddOverrides calls": {
+			config: func() *Config {
+				c := &Config{
+					Library: monaxpb.Library_builder{
+						Components: []*monaxpb.Component{
+							monaxpb.Component_builder{
+								Id: proto.String("A"),
+							}.Build(),
+						},
+					}.Build(),
+				}
+				c.AddOverrides(monaxpb.Component_builder{
+					Id: proto.String("Override1"),
+				}.Build())
+				c.AddOverrides(monaxpb.Component_builder{
+					Id: proto.String("Override2"),
+				}.Build())
+				return c
+			}(),
+			wantConfig: &Config{
+				Library: monaxpb.Library_builder{
+					Components: []*monaxpb.Component{
+						monaxpb.Component_builder{
+							Id: proto.String("A"),
+						}.Build(),
+					},
+					Overrides: []*monaxpb.Component{
+						monaxpb.Component_builder{
+							Id: proto.String("Override1"),
+						}.Build(),
+						monaxpb.Component_builder{
+							Id: proto.String("Override2"),
+						}.Build(),
+					},
+				}.Build(),
+			},
+		},
 	}
 	for name, test := range tests {
 		test := test
